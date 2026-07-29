@@ -3,12 +3,13 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent><groupId>top.mc100</groupId><artifactId>qdbank-parent</artifactId><version>1.0.3</version></parent>
+    <parent><groupId>top.mc100</groupId><artifactId>qdbank-parent</artifactId><version>1.0.4</version></parent>
     <artifactId>qdbank-client</artifactId>
     <dependencies>
         <dependency><groupId>top.mc100</groupId><artifactId>qdbank-common</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>io.netty</groupId><artifactId>netty-all</artifactId></dependency>
         <dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><scope>provided</scope></dependency>
+        <dependency><groupId>de.tr7zw</groupId><artifactId>item-nbt-api</artifactId></dependency>
     </dependencies>
     <build>
         <finalName>qdbank-client</finalName>
@@ -21,6 +22,7 @@
                         <artifactSet><excludes><exclude>io.papermc.paper:paper-api</exclude></excludes></artifactSet>
                         <relocations>
                             <relocation><pattern>io.netty</pattern><shadedPattern>top.mc100.qdbank.libs.netty</shadedPattern></relocation>
+                            <relocation><pattern>de.tr7zw.changeme.nbtapi</pattern><shadedPattern>top.mc100.qdbank.libs.nbtapi</shadedPattern></relocation>
                         </relocations>
                     </configuration>
                 </execution></executions>

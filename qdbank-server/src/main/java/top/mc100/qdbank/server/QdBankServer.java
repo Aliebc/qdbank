@@ -22,7 +22,7 @@ public final class QdBankServer {
         NettyServer server=new NettyServer();
         server.start(config,new SessionManager(),new AccountRepository(database),new AuditLogRepository(database),databaseExecutor);
         Runtime.getRuntime().addShutdownHook(new Thread(()->{server.close();databaseExecutor.shutdown();database.close();},"qdbank-shutdown"));
-        System.out.printf("qdbank-server 1.0.3 listening on %s:%d%n",config.host(),config.port());
+        System.out.printf("qdbank-server 1.0.4 listening on %s:%d%n",config.host(),config.port());
         server.channel().closeFuture().sync();
     }
 }

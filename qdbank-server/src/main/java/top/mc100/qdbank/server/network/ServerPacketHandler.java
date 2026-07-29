@@ -30,9 +30,9 @@ public final class ServerPacketHandler extends SimpleChannelInboundHandler<Packe
         databaseExecutor.execute(()->process(ctx,packet));
     }
     private void handshake(ChannelHandlerContext ctx,HandshakePacket p){
-        boolean accepted=config.secretKey().equals(p.secretKey())&&config.clientIds().contains(p.clientId())&&"1.0.3".equals(p.version());
+        boolean accepted=config.secretKey().equals(p.secretKey())&&config.clientIds().contains(p.clientId())&&"1.0.4".equals(p.version());
         if(accepted)sessions.authenticate(ctx.channel(),p.clientId());
-        ctx.writeAndFlush(new HandshakeResultPacket(accepted,"1.0.3",accepted?"Authenticated":"Invalid client, key, or version"));
+        ctx.writeAndFlush(new HandshakeResultPacket(accepted,"1.0.4",accepted?"Authenticated":"Invalid client, key, or version"));
         if(!accepted)ctx.executor().schedule((Runnable)ctx::close,1,java.util.concurrent.TimeUnit.SECONDS);
     }
     private void process(ChannelHandlerContext ctx,Packet packet){

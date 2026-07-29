@@ -5,12 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>top.mc100</groupId><artifactId>qdbank-parent</artifactId>
-        <version>1.0.3</version>
+        <version>1.0.4</version>
     </parent>
     <artifactId>qdbank-common</artifactId>
     <dependencies>
         <dependency><groupId>io.netty</groupId><artifactId>netty-all</artifactId></dependency>
         <dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><scope>provided</scope></dependency>
+        <dependency><groupId>de.tr7zw</groupId><artifactId>item-nbt-api</artifactId><scope>provided</scope></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
     </dependencies>
 </project>

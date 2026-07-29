@@ -71,8 +71,8 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
                 main(()->{
                     if(packet instanceof AccountResponsePacket response&&response.success()){
                         try{
-                            ItemStack[] contents=ItemSerializer.deserialize(response.content());
-                            viewer.openInventory(new BankInventoryHolder(owner,ownerName(owner),account,response.readOnly(),response.revision(),contents).getInventory());
+                            var decoded=ItemSerializer.deserializeDetailed(response.content());
+                            viewer.openInventory(new BankInventoryHolder(owner,ownerName(owner),account,response.readOnly(),response.revision(),decoded).getInventory());
                             viewer.sendMessage("§a"+response.message());
                         }catch(Exception exception){viewer.sendMessage("§c账户数据损坏，已拒绝打开");}
                     }else sender.sendMessage("§c"+message(packet));
@@ -90,11 +90,12 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
     }
     public void pushUpdate(BankInventoryHolder holder,String detail){
         if(holder.readOnly()||holder.applyingSync()||holder.saving()||!bankClient.isConnected())return;
-        byte[] content=ItemSerializer.serialize(holder.getInventory().getContents());
+        byte[] content=ItemSerializer.serialize(holder.getInventory().getContents(),holder.portableItems(),holder.placeholders());
         long id=bankClient.nextRequestId();
         holder.saving(true);
         updateRequests.put(id,holder);
-        String encoded=AuditItemCodec.encode(diff(holder.authoritative(),ItemSerializer.deserialize(content)));
+        var decodedAfter=ItemSerializer.deserializeDetailed(content);
+        String encoded=AuditItemCodec.encode(diff(holder.authoritative(),decodedAfter.items(),holder.portableItems(),decodedAfter.portableItems()));
         if(!bankClient.send(new ContainerUpdatePacket(id,holder.owner().toString(),holder.accountName(),holder.revision(),content,
                 encoded,context(viewer(holder))))){
             updateRequests.remove(id);holder.saving(false);closeMatching(holder,"§c保存失败：连接已断开");
@@ -102,7 +103,7 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
     }
     public void closeRemote(BankInventoryHolder holder){bankClient.send(new AccountClosePacket(holder.owner().toString(),holder.accountName(),context(viewer(holder))));}
     public void status(CommandSender sender){
-        sender.sendMessage("§6QDBANK §7| §f客户端 1.0.3 §7| §f服务端 "+serverVersion);
+        sender.sendMessage("§6QDBANK §7| §f客户端 1.0.4 §7| §f服务端 "+serverVersion);
         sender.sendMessage(bankClient.isConnected()?"§a连接正常 §7| §f延迟 "+(bankClient.latencyMillis()<0?"等待心跳":bankClient.latencyMillis()+" ms"):"§c未连接（正在自动重连）");
         sender.sendMessage("§8Copyright © 2026 QDBANK · mc100.top. All rights reserved.");
     }
@@ -190,7 +191,7 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
         BankInventoryHolder requester=updateRequests.remove(packet.requestId());
         if(!packet.accepted()){
             if(requester!=null){
-                try{requester.apply(ItemSerializer.deserialize(packet.content()),packet.revision());}
+                try{requester.apply(ItemSerializer.deserializeDetailed(packet.content()),packet.revision());}
                 catch(Exception e){closeMatching(requester,"§c同步数据异常，银行已关闭");return;}
                 for(Player player:getServer().getOnlinePlayers())if(player.getOpenInventory().getTopInventory().getHolder(false)==requester)player.sendMessage("§e"+packet.message());
             }
@@ -200,7 +201,7 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
             if(player.getOpenInventory().getTopInventory().getHolder(false) instanceof BankInventoryHolder holder
                     &&holder.owner().toString().equals(packet.playerUuid())&&holder.accountName().equals(packet.accountName())){
                 try{
-                    holder.apply(ItemSerializer.deserialize(packet.content()),packet.revision());
+                    holder.apply(ItemSerializer.deserializeDetailed(packet.content()),packet.revision());
                 }catch(Exception e){closeMatching(holder,"§c同步数据异常，银行已关闭");}
             }
         }
@@ -216,22 +217,22 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
     private Player viewer(BankInventoryHolder holder){
         return getServer().getOnlinePlayers().stream().filter(p->p.getOpenInventory().getTopInventory().getHolder(false)==holder).findFirst().orElse(null);
     }
-    private static java.util.List<AuditItemChange> diff(ItemStack[] before,ItemStack[] after){
+    private static java.util.List<AuditItemChange> diff(ItemStack[] before,ItemStack[] after,byte[][] beforePortable,byte[][] afterPortable){
         java.util.List<AuditItemChange> changes=new java.util.ArrayList<>();
         for(int i=0;i<54;i++){
             ItemStack old=before[i],now=after[i];
             if(old==null&&now==null)continue;
             if(old!=null&&now!=null&&old.isSimilar(now)){
-                int delta=now.getAmount()-old.getAmount();if(delta!=0)changes.add(change(i,delta,delta>0?now:old,old,now));continue;
+                int delta=now.getAmount()-old.getAmount();if(delta!=0)changes.add(change(i,delta,delta>0?now:old,beforePortable[i],afterPortable[i]));continue;
             }
-            if(old!=null)changes.add(change(i,-old.getAmount(),old,old,now));
-            if(now!=null)changes.add(change(i,now.getAmount(),now,old,now));
+            if(old!=null)changes.add(change(i,-old.getAmount(),old,beforePortable[i],afterPortable[i]));
+            if(now!=null)changes.add(change(i,now.getAmount(),now,beforePortable[i],afterPortable[i]));
         }
         return changes;
     }
-    private static AuditItemChange change(int slot,int amount,ItemStack item,ItemStack before,ItemStack after){
-        return new AuditItemChange(slot,amount,item.getType().getKey().toString(),item.serializeAsBytes(),
-                before==null?new byte[0]:before.serializeAsBytes(),after==null?new byte[0]:after.serializeAsBytes());
+    private static AuditItemChange change(int slot,int amount,ItemStack item,byte[] before,byte[] after){
+        return new AuditItemChange(slot,amount,item.getType().getKey().toString(),ItemSerializer.serializeItem(item),
+                before==null?new byte[0]:before,after==null?new byte[0]:after);
     }
     private static void sendAudit(CommandSender sender,AuditEntry entry){
         OperationContext c=entry.context();
@@ -239,7 +240,7 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
         if(entry.changes().isEmpty()){sender.sendMessage(line);sender.sendMessage("§8------");return;}
         for(AuditItemChange change:entry.changes()){
             try{
-                ItemStack item=ItemStack.deserializeBytes(change.itemBytes());
+                ItemStack item=ItemSerializer.deserializeItem(change.itemBytes());
                 Component itemName=item.displayName().color(NamedTextColor.BLUE).hoverEvent(item.asHoverEvent());
                 sender.sendMessage(line.append(Component.text(change.amount()>0?"added x"+change.amount()+" ":"removed x"+(-change.amount())+" ",
                         change.amount()>0?NamedTextColor.GREEN:NamedTextColor.RED)).append(itemName)
