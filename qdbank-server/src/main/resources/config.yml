@@ -1,0 +1,10 @@
+server:
+  host: "0.0.0.0"
+  port: 25565
+  secret_key: "CHANGE_ME_SECRET_KEY"
+clients:
+  - id: "client_server_01_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+    name: "生存一服"
+database:
+  file: "qdbank.db"
+  pool_size: 10

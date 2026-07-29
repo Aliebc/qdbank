@@ -1,0 +1,19 @@
+name: qdbank
+version: 1.0.2
+main: top.mc100.qdbank.client.QdBankPlugin
+api-version: '1.21'
+description: 起点银行跨服客户端
+authors: [mc100]
+permissions:
+  qdbank.command.open: {default: true}
+  qdbank.command.close: {default: true}
+  qdbank.command.list: {default: true}
+  qdbank.command.see: {default: true}
+  qdbank.command.status: {default: true}
+  qdbank.admin.reload: {default: op}
+  qdbank.admin.open: {default: op}
+  qdbank.admin.close: {default: op}
+  qdbank.admin.list: {default: op}
+  qdbank.admin.see: {default: op}
+  qdbank.admin.lookup: {default: op}
+  qdbank.admin.rollback: {default: op}
