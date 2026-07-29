@@ -44,15 +44,14 @@ public final class QdBankCommands {
                 .then(Commands.argument("player",StringArgumentType.word()).suggests((c,b)->suggestPlayers(b))
                         .executes(c->{plugin.list(c.getSource().getSender(),StringArgumentType.getString(c,"player"));return 1;})));
         admin.then(Commands.literal("lookup").requires(s->s.getSender().hasPermission("qdbank.admin.lookup"))
-                .then(Commands.argument("player",StringArgumentType.word()).suggests((c,b)->suggestPlayers(b))
-                        .then(Commands.argument("range",StringArgumentType.word()).executes(c->{
-                            plugin.lookup(c.getSource().getSender(),StringArgumentType.getString(c,"player"),StringArgumentType.getString(c,"range"));return 1;
-                        }))));
+                .then(Commands.argument("params",StringArgumentType.greedyString()).suggests((c,b)->suggestAuditParams(b))
+                        .executes(c->{plugin.lookup(c.getSource().getSender(),StringArgumentType.getString(c,"params"));return 1;})));
+        admin.then(Commands.literal("page").requires(s->s.getSender().hasPermission("qdbank.admin.lookup"))
+                .then(Commands.argument("number",com.mojang.brigadier.arguments.IntegerArgumentType.integer(1))
+                        .executes(c->{plugin.page(c.getSource().getSender(),com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c,"number"));return 1;})));
         admin.then(Commands.literal("rollback").requires(s->s.getSender().hasPermission("qdbank.admin.rollback"))
-                .then(Commands.argument("player",StringArgumentType.word()).suggests((c,b)->suggestPlayers(b))
-                        .then(Commands.argument("range",StringArgumentType.word()).executes(c->{
-                            plugin.rollback(c.getSource().getSender(),StringArgumentType.getString(c,"player"),StringArgumentType.getString(c,"range"));return 1;
-                        }))));
+                .then(Commands.argument("params",StringArgumentType.greedyString()).suggests((c,b)->suggestAuditParams(b))
+                        .executes(c->{plugin.rollback(c.getSource().getSender(),StringArgumentType.getString(c,"params"));return 1;})));
         root.then(admin);return root;
     }
     private LiteralArgumentBuilder<CommandSourceStack> accountCommand(String name,String permission,AccountAction action){
@@ -92,6 +91,34 @@ public final class QdBankCommands {
             future.complete(builder.build());
         });
         return future;
+    }
+    private java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestAuditParams(
+            com.mojang.brigadier.suggestion.SuggestionsBuilder builder){
+        String remaining=builder.getRemaining(),token=remaining.substring(remaining.lastIndexOf(' ')+1);
+        int tokenStart=builder.getStart()+remaining.lastIndexOf(' ')+1;
+        var current=builder.createOffset(tokenStart);
+        if(token.startsWith("user:")||token.startsWith("u:")){
+            String prefix=token.substring(0,token.indexOf(':')+1);
+            var future=new java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>();
+            plugin.directory(null,players->{players.forEach(p->current.suggest(prefix+p.playerName()));future.complete(current.build());});return future;
+        }
+        if(token.startsWith("action:")||token.startsWith("a:")){
+            String prefix=token.substring(0,token.indexOf(':')+1);
+            for(String action:java.util.List.of("inventory","+inventory","-inventory","open","close","create","delete","rollback"))current.suggest(prefix+action);
+            return current.buildFuture();
+        }
+        if(token.startsWith("time:")||token.startsWith("t:")){
+            String prefix=token.substring(0,token.indexOf(':')+1);
+            for(String time:java.util.List.of("30m","1h","6h","1d","7d","2w"))current.suggest(prefix+time);
+            return current.buildFuture();
+        }
+        if(token.startsWith("include:")||token.startsWith("i:")||token.startsWith("exclude:")||token.startsWith("e:")){
+            String prefix=token.substring(0,token.indexOf(':')+1);
+            org.bukkit.Registry.MATERIAL.stream().filter(org.bukkit.Material::isItem).limit(1000).forEach(m->current.suggest(prefix+m.getKey().getKey()));
+            return current.buildFuture();
+        }
+        for(String parameter:java.util.List.of("user:","action:","time:","include:","exclude:"))current.suggest(parameter);
+        return current.buildFuture();
     }
     private void help(CommandSender sender){sender.sendMessage("§6/qdbank open|close|list|see|status；管理员使用 /qdbank admin ...");}
     @FunctionalInterface private interface AccountAction{void run(CommandSender sender,String account);}

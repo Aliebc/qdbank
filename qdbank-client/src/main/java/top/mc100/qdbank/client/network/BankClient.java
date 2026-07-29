@@ -50,7 +50,7 @@ public final class BankClient implements AutoCloseable {
                 .option(ChannelOption.TCP_NODELAY,true).handler(new ChannelInitializer<SocketChannel>(){
                     @Override protected void initChannel(SocketChannel ch){NetworkPipeline.install(ch.pipeline());ch.pipeline().addLast(new Handler());}
                 }).connect(config.host(),config.port()).addListener((ChannelFutureListener)future->{
-                    if(future.isSuccess()){channel=future.channel();future.channel().writeAndFlush(new HandshakePacket(config.id(),config.secretKey(),"1.0.2"));}
+                    if(future.isSuccess()){channel=future.channel();future.channel().writeAndFlush(new HandshakePacket(config.id(),config.secretKey(),"1.0.3"));}
                     else scheduleReconnect();
                 });
     }

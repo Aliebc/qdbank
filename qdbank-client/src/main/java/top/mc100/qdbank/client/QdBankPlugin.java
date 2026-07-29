@@ -9,6 +9,7 @@ import org.bukkit.Location;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.event.ClickEvent;
 import top.mc100.qdbank.common.dto.*;
 import top.mc100.qdbank.client.command.QdBankCommands;
 import top.mc100.qdbank.client.config.ClientConfig;
@@ -28,16 +29,23 @@ import java.util.function.Consumer;
 public final class QdBankPlugin extends JavaPlugin implements BankClient.Listener {
     private BankClient bankClient;
     private final ConcurrentHashMap<Long,BankInventoryHolder> updateRequests=new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String,LookupSpec> lastLookups=new ConcurrentHashMap<>();
     private volatile String serverVersion="?";
     @Override public void onEnable(){
         saveDefaultConfig();
         bankClient=new BankClient(ClientConfig.from(getConfig()),this);
         getServer().getPluginManager().registerEvents(new BankInventoryListener(this),this);
+        getServer().getPluginManager().registerEvents(new DefaultAccountListener(this),this);
         new QdBankCommands(this).register();
         bankClient.start();
     }
     @Override public void onDisable(){BankInventoryListener.closeAll(this,"§c银行插件正在关闭");if(bankClient!=null)bankClient.close();}
     public BankClient bankClient(){return bankClient;}
+    public void ensureDefaultAccounts(Player player){
+        long id=bankClient.nextRequestId();
+        bankClient.request(id,new AccountRequestPacket(id,AccountRequestPacket.Operation.LIST,player.getUniqueId().toString(),
+                player.getName(),"_",false,context(player)),ignored->{});
+    }
 
     public void create(CommandSender sender,String target,String account){accountRequest(sender,target,account,AccountRequestPacket.Operation.CREATE);}
     public void delete(CommandSender sender,String target,String account){accountRequest(sender,target,account,AccountRequestPacket.Operation.DELETE);}
@@ -94,28 +102,47 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
     }
     public void closeRemote(BankInventoryHolder holder){bankClient.send(new AccountClosePacket(holder.owner().toString(),holder.accountName(),context(viewer(holder))));}
     public void status(CommandSender sender){
-        sender.sendMessage("§6QDBANK §7| §f客户端 1.0.2 §7| §f服务端 "+serverVersion);
+        sender.sendMessage("§6QDBANK §7| §f客户端 1.0.3 §7| §f服务端 "+serverVersion);
         sender.sendMessage(bankClient.isConnected()?"§a连接正常 §7| §f延迟 "+(bankClient.latencyMillis()<0?"等待心跳":bankClient.latencyMillis()+" ms"):"§c未连接（正在自动重连）");
         sender.sendMessage("§8Copyright © 2026 QDBANK · mc100.top. All rights reserved.");
     }
     public void reloadBank(CommandSender sender){
         reloadConfig();bankClient.reconfigure(ClientConfig.from(getConfig()));sender.sendMessage("§a配置已重载，正在重连");
     }
-    public void lookup(CommandSender sender,String playerName,String range){
-        UUID uuid=resolve(sender,playerName);if(uuid==null)return;
-        long since=System.currentTimeMillis()-parseRange(range).toMillis();long id=bankClient.nextRequestId();
-        bankClient.request(id,new AuditLookupPacket(id,uuid.toString(),since),packet->main(()->{
-            if(packet instanceof AuditResultPacket result){sender.sendMessage("§6最近审计记录：");result.entries().forEach(entry->sendAudit(sender,entry));}
-            else sender.sendMessage("§c"+message(packet));
-        }));
+    public void lookup(CommandSender sender,String arguments){
+        LookupSpec spec=parseSpec(arguments,1);lastLookups.put(senderKey(sender),spec);executeLookup(sender,spec);
     }
-    public void rollback(CommandSender sender,String playerName,String range){
-        UUID uuid=resolve(sender,playerName);if(uuid==null)return;
-        long since=System.currentTimeMillis()-parseRange(range).toMillis(),id=bankClient.nextRequestId();
-        bankClient.request(id,new RollbackPacket(id,uuid.toString(),since,context(sender)),packet->main(()->{
-            if(packet instanceof RollbackResultPacket result)sender.sendMessage("§a回滚完成，恢复账户数："+result.restoredAccounts());
-            else sender.sendMessage("§c"+message(packet));
-        }));
+    public void page(CommandSender sender,int page){
+        LookupSpec previous=lastLookups.get(senderKey(sender));
+        if(previous==null){sender.sendMessage("§c请先执行一次 lookup");return;}
+        LookupSpec next=previous.withPage(page);lastLookups.put(senderKey(sender),next);executeLookup(sender,next);
+    }
+    private void executeLookup(CommandSender sender,LookupSpec spec){
+        resolveBankUser(spec.user(),uuid->{
+            if(uuid==null){main(()->sender.sendMessage("§c银行中找不到玩家 "+spec.user()));return;}
+            long id=bankClient.nextRequestId(),since=System.currentTimeMillis()-parseRange(spec.time()).toMillis();
+            bankClient.request(id,new AuditLookupPacket(id,uuid,since,spec.action(),spec.include(),spec.exclude(),spec.page(),spec.pageSize()),packet->main(()->{
+                if(packet instanceof AuditResultPacket result){
+                    sender.sendMessage("§6----- QDBANK Lookup §7("+result.page()+"/"+result.totalPages()+") §6-----");
+                    result.entries().forEach(entry->sendAudit(sender,entry));
+                    Component nav=Component.text("« 上一页",NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/qdbank admin page "+Math.max(1,result.page()-1)))
+                            .append(Component.text("  |  ",NamedTextColor.DARK_GRAY))
+                            .append(Component.text("下一页 »",NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/qdbank admin page "+Math.min(result.totalPages(),result.page()+1))));
+                    sender.sendMessage(nav);
+                }else sender.sendMessage("§c"+message(packet));
+            }));
+        });
+    }
+    public void rollback(CommandSender sender,String arguments){
+        LookupSpec spec=parseSpec(arguments,1);
+        resolveBankUser(spec.user(),uuid->{
+            if(uuid==null){main(()->sender.sendMessage("§c银行中找不到玩家 "+spec.user()));return;}
+            long since=System.currentTimeMillis()-parseRange(spec.time()).toMillis(),id=bankClient.nextRequestId();
+            bankClient.request(id,new RollbackPacket(id,uuid,since,spec.action(),spec.include(),spec.exclude(),context(sender)),packet->main(()->{
+                if(packet instanceof RollbackResultPacket result)sender.sendMessage("§a回滚完成，恢复物品变更数："+result.restoredAccounts());
+                else sender.sendMessage("§c"+message(packet));
+            }));
+        });
     }
     public void directory(String playerUuid,Consumer<List<PlayerAccounts>> callback){
         long id=bankClient.nextRequestId();
@@ -124,9 +151,28 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
             else callback.accept(List.of());
         });
     }
+    private void resolveBankUser(String name,Consumer<String> callback){
+        directory(null,players->callback.accept(players.stream().filter(p->p.playerName().equalsIgnoreCase(name)).map(PlayerAccounts::uuid).findFirst().orElse(null)));
+    }
     private Duration parseRange(String value){
-        try{long number=Long.parseLong(value.substring(0,value.length()-1));return switch(value.charAt(value.length()-1)){case'h'->Duration.ofHours(number);case'd'->Duration.ofDays(number);case'm'->Duration.ofMinutes(number);default->Duration.ofDays(7);};}
-        catch(Exception ignored){return Duration.ofDays(7);}
+        try{
+            java.util.regex.Matcher matcher=java.util.regex.Pattern.compile("(\\d+(?:\\.\\d+)?)([wdhms])").matcher(value.toLowerCase());
+            double seconds=0;while(matcher.find()){double n=Double.parseDouble(matcher.group(1));seconds+=n*switch(matcher.group(2)){case"w"->604800;case"d"->86400;case"h"->3600;case"m"->60;default->1;};}
+            return seconds>0?Duration.ofMillis((long)(seconds*1000)):Duration.ofDays(7);
+        }catch(Exception ignored){return Duration.ofDays(7);}
+    }
+    private LookupSpec parseSpec(String arguments,int defaultPage){
+        java.util.Map<String,String> values=new java.util.HashMap<>();
+        for(String token:arguments.trim().split("\\s+")){int colon=token.indexOf(':');if(colon>0)values.put(token.substring(0,colon).toLowerCase(),token.substring(colon+1));}
+        return new LookupSpec(values.getOrDefault("user",values.getOrDefault("u","")),
+                values.getOrDefault("action",values.getOrDefault("a","inventory")),
+                values.getOrDefault("time",values.getOrDefault("t","30m")),
+                values.getOrDefault("include",values.getOrDefault("i","")),
+                values.getOrDefault("exclude",values.getOrDefault("e","")),defaultPage,10);
+    }
+    private static String senderKey(CommandSender sender){return sender instanceof Player p?p.getUniqueId().toString():"CONSOLE";}
+    private record LookupSpec(String user,String action,String time,String include,String exclude,int page,int pageSize){
+        LookupSpec withPage(int value){return new LookupSpec(user,action,time,include,exclude,value,pageSize);}
     }
     @SuppressWarnings("deprecation")
     private UUID resolve(CommandSender sender,String target){
@@ -135,7 +181,10 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
         if(!player.hasPlayedBefore()&&!player.isOnline()){sender.sendMessage("§c找不到玩家 "+target);return null;}
         return player.getUniqueId();
     }
-    @Override public void connected(String version){serverVersion=version;getLogger().info("已连接 qdbank-server "+version);}
+    @Override public void connected(String version){
+        serverVersion=version;getLogger().info("已连接 qdbank-server "+version);
+        main(()->getServer().getOnlinePlayers().forEach(this::ensureDefaultAccounts));
+    }
     @Override public void disconnected(){updateRequests.clear();main(()->BankInventoryListener.closeAll(this,"§c银行连接已断开，界面已强制关闭"));getLogger().warning("银行连接断开，正在重连");}
     @Override public void synchronizedContainer(ContainerSyncPacket packet){main(()->{
         BankInventoryHolder requester=updateRequests.remove(packet.requestId());
@@ -161,8 +210,8 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
     }
     private void main(Runnable task){getServer().getScheduler().runTask(this,task);}
     private OperationContext context(CommandSender sender){
-        if(sender instanceof Player player){Location l=player.getLocation();return new OperationContext(l.getWorld().getName(),l.getX(),l.getY(),l.getZ(),getConfig().getString("client.id","unknown"));}
-        return new OperationContext("CONSOLE",0,0,0,getConfig().getString("client.id","unknown"));
+        if(sender instanceof Player player){Location l=player.getLocation();return new OperationContext(player.getUniqueId().toString(),player.getName(),l.getWorld().getName(),l.getX(),l.getY(),l.getZ(),getConfig().getString("client.id","unknown"));}
+        return new OperationContext("CONSOLE","CONSOLE","CONSOLE",0,0,0,getConfig().getString("client.id","unknown"));
     }
     private Player viewer(BankInventoryHolder holder){
         return getServer().getOnlinePlayers().stream().filter(p->p.getOpenInventory().getTopInventory().getHolder(false)==holder).findFirst().orElse(null);
@@ -173,26 +222,39 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
             ItemStack old=before[i],now=after[i];
             if(old==null&&now==null)continue;
             if(old!=null&&now!=null&&old.isSimilar(now)){
-                int delta=now.getAmount()-old.getAmount();if(delta!=0)changes.add(change(delta,delta>0?now:old));continue;
+                int delta=now.getAmount()-old.getAmount();if(delta!=0)changes.add(change(i,delta,delta>0?now:old,old,now));continue;
             }
-            if(old!=null)changes.add(change(-old.getAmount(),old));
-            if(now!=null)changes.add(change(now.getAmount(),now));
+            if(old!=null)changes.add(change(i,-old.getAmount(),old,old,now));
+            if(now!=null)changes.add(change(i,now.getAmount(),now,old,now));
         }
         return changes;
     }
-    private static AuditItemChange change(int amount,ItemStack item){return new AuditItemChange(amount,item.getType().getKey().toString(),item.serializeAsBytes());}
+    private static AuditItemChange change(int slot,int amount,ItemStack item,ItemStack before,ItemStack after){
+        return new AuditItemChange(slot,amount,item.getType().getKey().toString(),item.serializeAsBytes(),
+                before==null?new byte[0]:before.serializeAsBytes(),after==null?new byte[0]:after.serializeAsBytes());
+    }
     private static void sendAudit(CommandSender sender,AuditEntry entry){
         OperationContext c=entry.context();
-        Component line=Component.text(entry.timestamp()+" "+entry.action()+" ["+entry.accountName()+"] @ "+c.serverId()+"/"+c.world()+" "+
-                Math.round(c.x())+","+Math.round(c.y())+","+Math.round(c.z())+" ",NamedTextColor.GRAY);
-        if(entry.changes().isEmpty()){sender.sendMessage(line);return;}
+        Component line=Component.text("["+ago(entry.timestamp())+"] "+c.actorName()+" ",NamedTextColor.GRAY);
+        if(entry.changes().isEmpty()){sender.sendMessage(line);sender.sendMessage("§8------");return;}
         for(AuditItemChange change:entry.changes()){
             try{
                 ItemStack item=ItemStack.deserializeBytes(change.itemBytes());
                 Component itemName=item.displayName().color(NamedTextColor.BLUE).hoverEvent(item.asHoverEvent());
-                sender.sendMessage(line.append(Component.text((change.amount()>0?"+":"")+change.amount()+" ",change.amount()>0?NamedTextColor.GREEN:NamedTextColor.RED)).append(itemName));
+                sender.sendMessage(line.append(Component.text(change.amount()>0?"added x"+change.amount()+" ":"removed x"+(-change.amount())+" ",
+                        change.amount()>0?NamedTextColor.GREEN:NamedTextColor.RED)).append(itemName)
+                        .append(Component.text("\n("+Math.round(c.x())+"/"+Math.round(c.y())+"/"+Math.round(c.z())+"/"+c.world()+"/"+c.serverId()+")",NamedTextColor.GRAY)));
             }catch(Exception ignored){sender.sendMessage(line.append(Component.text(change.amount()+" "+change.material(),NamedTextColor.BLUE)));}
         }
+        sender.sendMessage("§8------");
+    }
+    private static String ago(String timestamp){
+        try{
+            long seconds=Math.max(0,(System.currentTimeMillis()-Long.parseLong(timestamp))/1000);
+            if(seconds<60)return seconds+"s ago";if(seconds<3600)return String.format(java.util.Locale.ROOT,"%.1fm ago",seconds/60d);
+            if(seconds<86400)return String.format(java.util.Locale.ROOT,"%.1fh ago",seconds/3600d);
+            return String.format(java.util.Locale.ROOT,"%.1fd ago",seconds/86400d);
+        }catch(Exception ignored){return timestamp;}
     }
     @SuppressWarnings("deprecation")
     private String ownerName(UUID owner){

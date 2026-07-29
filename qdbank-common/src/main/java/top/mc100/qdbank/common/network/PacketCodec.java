@@ -26,10 +26,12 @@ final class PacketCodec {
             case ContainerUpdatePacket p -> { out.writeByte(7); out.writeLong(p.requestId()); string(out,p.playerUuid()); string(out,p.accountName()); out.writeLong(p.expectedRevision()); bytes(out,p.content()); string(out,p.itemDetail()); context(out,p.context()); }
             case ContainerSyncPacket p -> { out.writeByte(8); out.writeLong(p.requestId()); string(out,p.playerUuid()); string(out,p.accountName()); out.writeLong(p.revision()); bytes(out,p.content()); out.writeBoolean(p.accepted()); string(out,p.message()); }
             case AccountClosePacket p -> { out.writeByte(9); string(out,p.playerUuid()); string(out,p.accountName()); context(out,p.context()); }
-            case AuditLookupPacket p -> { out.writeByte(10); out.writeLong(p.requestId()); string(out,p.playerUuid()); out.writeLong(p.sinceEpochMillis()); }
-            case AuditResultPacket p -> { out.writeByte(11); out.writeLong(p.requestId()); entries(out,p.entries()); }
+            case AuditLookupPacket p -> { out.writeByte(10); out.writeLong(p.requestId()); string(out,p.playerUuid()); out.writeLong(p.sinceEpochMillis());
+                string(out,p.action());string(out,p.include());string(out,p.exclude());out.writeInt(p.page());out.writeInt(p.pageSize()); }
+            case AuditResultPacket p -> { out.writeByte(11); out.writeLong(p.requestId());out.writeInt(p.page());out.writeInt(p.totalPages());entries(out,p.entries()); }
             case ErrorPacket p -> { out.writeByte(12); out.writeLong(p.requestId()); string(out,p.message()); }
-            case RollbackPacket p -> { out.writeByte(13); out.writeLong(p.requestId()); string(out,p.playerUuid()); out.writeLong(p.sinceEpochMillis()); context(out,p.context()); }
+            case RollbackPacket p -> { out.writeByte(13); out.writeLong(p.requestId()); string(out,p.playerUuid()); out.writeLong(p.sinceEpochMillis());
+                string(out,p.action());string(out,p.include());string(out,p.exclude());context(out,p.context()); }
             case RollbackResultPacket p -> { out.writeByte(14); out.writeLong(p.requestId()); out.writeBoolean(p.success()); out.writeInt(p.restoredAccounts()); string(out,p.message()); }
             case DirectoryRequestPacket p -> { out.writeByte(15); out.writeLong(p.requestId()); string(out,p.playerUuid()); }
             case DirectoryResponsePacket p -> {
@@ -50,10 +52,10 @@ final class PacketCodec {
             case 7 -> new ContainerUpdatePacket(in.readLong(), string(in), string(in), in.readLong(), bytes(in), string(in), context(in));
             case 8 -> new ContainerSyncPacket(in.readLong(), string(in), string(in), in.readLong(), bytes(in), in.readBoolean(), string(in));
             case 9 -> new AccountClosePacket(string(in), string(in), context(in));
-            case 10 -> new AuditLookupPacket(in.readLong(), string(in), in.readLong());
-            case 11 -> new AuditResultPacket(in.readLong(), entries(in));
+            case 10 -> new AuditLookupPacket(in.readLong(),string(in),in.readLong(),string(in),string(in),string(in),in.readInt(),in.readInt());
+            case 11 -> new AuditResultPacket(in.readLong(),in.readInt(),in.readInt(),entries(in));
             case 12 -> new ErrorPacket(in.readLong(), string(in));
-            case 13 -> new RollbackPacket(in.readLong(),string(in),in.readLong(),context(in));
+            case 13 -> new RollbackPacket(in.readLong(),string(in),in.readLong(),string(in),string(in),string(in),context(in));
             case 14 -> new RollbackResultPacket(in.readLong(),in.readBoolean(),in.readInt(),string(in));
             case 15 -> new DirectoryRequestPacket(in.readLong(),string(in));
             case 16 -> {
@@ -110,18 +112,22 @@ final class PacketCodec {
     }
 
     private static void context(ByteBuf out,OperationContext context){
-        OperationContext value=context==null?new OperationContext("UNKNOWN",0,0,0,"unknown"):context;
-        string(out,value.world());out.writeDouble(value.x());out.writeDouble(value.y());out.writeDouble(value.z());string(out,value.serverId());
+        OperationContext value=context==null?new OperationContext("CONSOLE","CONSOLE","UNKNOWN",0,0,0,"unknown"):context;
+        string(out,value.actorUuid());string(out,value.actorName());string(out,value.world());
+        out.writeDouble(value.x());out.writeDouble(value.y());out.writeDouble(value.z());string(out,value.serverId());
     }
     private static OperationContext context(ByteBuf in){
-        return new OperationContext(string(in),in.readDouble(),in.readDouble(),in.readDouble(),string(in));
+        return new OperationContext(string(in),string(in),string(in),in.readDouble(),in.readDouble(),in.readDouble(),string(in));
     }
     private static void entries(ByteBuf out,List<AuditEntry> entries){
         out.writeInt(entries.size());
         for(AuditEntry entry:entries){
             string(out,entry.timestamp());string(out,entry.accountName());out.writeByte(entry.action().ordinal());
             out.writeInt(entry.changes().size());
-            for(AuditItemChange change:entry.changes()){out.writeInt(change.amount());string(out,change.material());bytes(out,change.itemBytes());}
+            for(AuditItemChange change:entry.changes()){
+                out.writeInt(change.slot());out.writeInt(change.amount());string(out,change.material());bytes(out,change.itemBytes());
+                bytes(out,change.beforeItem());bytes(out,change.afterItem());
+            }
             context(out,entry.context());
         }
     }
@@ -132,7 +138,7 @@ final class PacketCodec {
             String timestamp=string(in),account=string(in);ActionType action=ActionType.values()[in.readUnsignedByte()];
             int count=in.readInt();if(count<0||count>500)throw new IllegalArgumentException("Invalid item count");
             List<AuditItemChange> changes=new ArrayList<>(count);
-            for(int j=0;j<count;j++)changes.add(new AuditItemChange(in.readInt(),string(in),bytes(in)));
+            for(int j=0;j<count;j++)changes.add(new AuditItemChange(in.readInt(),in.readInt(),string(in),bytes(in),bytes(in),bytes(in)));
             result.add(new AuditEntry(timestamp,account,action,changes,context(in)));
         }
         return result;

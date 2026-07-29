@@ -44,14 +44,14 @@ public final class Database implements AutoCloseable {
                   action_type VARCHAR(16) NOT NULL,
                   item_detail TEXT,
                   client_id VARCHAR(64) NOT NULL,
+                  actor_uuid VARCHAR(36) NOT NULL,
+                  actor_name VARCHAR(16) NOT NULL,
                   world VARCHAR(128) NOT NULL DEFAULT 'UNKNOWN',
                   x REAL NOT NULL DEFAULT 0,
                   y REAL NOT NULL DEFAULT 0,
                   z REAL NOT NULL DEFAULT 0,
                   server_id VARCHAR(64) NOT NULL DEFAULT 'unknown',
-                  before_content BLOB,
-                  after_content BLOB,
-                  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                  timestamp INTEGER NOT NULL
                 )""");
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_audit_uuid_time ON audit_logs(uuid, timestamp DESC)");
             statement.execute("PRAGMA journal_mode=WAL");

@@ -1,4 +1,4 @@
-# 起点银行（qdbank）1.0.2
+# 起点银行（qdbank）1.0.3
 
 适用于 Paper 1.21.1+ / Java 21 的跨服银行系统，由独立 Netty/SQLite 服务端与 Paper 客户端插件组成。
 
@@ -32,8 +32,12 @@ mvn clean package
 - 每次内容提交都携带 revision，服务端按到达顺序只接受第一个有效版本，后到的冲突操作会被拒绝并回退到权威内容。
 - 审计记录包含物品增减数量、完整 Paper 物品二进制数据、世界、坐标和客户端服务器 ID。
 - `/qdbank admin lookup <player> <range>` 查询审计，物品名称支持悬停查看完整提示信息。
-- `/qdbank admin rollback <player> <range>` 将时间范围内受影响的账户恢复到首条操作之前。
 - `/qdbank see` 的账户名补全直接读取银行服务端；`/qdbank admin see` 可补全银行内全部正版 UUID 玩家及其账户。
+- 玩家登录以及客户端重新连接银行服务端时，会检查并补齐默认账户。
+- 审计查询使用 `/qdbank admin lookup user:<玩家> action:<inventory|+inventory|-inventory> time:<时间> include:<物品> exclude:<物品>`；默认 `action:inventory time:30m`。
+- 客户端服务器 ID 支持短字符串或中文，例如 `ghzs`、`公会生存`。
+- 使用 `/qdbank admin page <页码>` 或查询结果中的可点击按钮翻页。
+- 回滚使用与查询相同的筛选参数，并按审计中的每个槽位物品变更逐项逆序恢复。
 - GUI 在一次保存确认前暂时阻止下一次变更。
 - 网络断开或版本冲突会立即关闭相关 GUI。
 - 所有服务端账户操作进入同一权威队列，避免更新与关闭乱序。
