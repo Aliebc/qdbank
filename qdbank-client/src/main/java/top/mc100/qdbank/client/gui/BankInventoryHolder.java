@@ -22,7 +22,7 @@ public final class BankInventoryHolder implements InventoryHolder {
 
     public BankInventoryHolder(UUID owner,String username,String accountName,boolean readOnly,long revision,ItemSerializer.DecodedInventory decoded){
         this.owner=owner;this.accountName=accountName;this.readOnly=readOnly;this.revision=revision;
-        inventory=Bukkit.createInventory(this,54,"QDBANK | "+username+" | "+accountName);
+        inventory=Bukkit.createInventory(this,54,"QDBank | "+username+" | "+accountName);
         ItemStack[] contents=decoded.items();
         inventory.setContents(contents);
         authoritative=cloneItems(contents);

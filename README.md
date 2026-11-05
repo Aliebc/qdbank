@@ -1,6 +1,6 @@
-# QDBANK 1.0.4
+# QDBank 1.0.4
 
-QDBANK is a cross-server personal item bank for Paper servers. It requires Paper 1.21.11–26.2 and Java 21.
+QDBank is a cross-server personal item bank for Paper servers. It requires Paper 1.21.11–26.2 and Java 21.
 
 ## What is a bank account?
 
@@ -13,9 +13,9 @@ Each player automatically receives two accounts:
 
 Players may create additional named accounts. Each account has a separate 54-slot inventory.
 
-The same account may be viewed from multiple connected servers. QDBANK uses a central authoritative server to process changes in arrival order, reject conflicting updates, and synchronize every open copy of the inventory.
+The same account may be viewed from multiple connected servers. QDBank uses a central authoritative server to process changes in arrival order, reject conflicting updates, and synchronize every open copy of the inventory.
 
-If the QDBANK connection is lost, open bank inventories are closed immediately to protect their contents.
+If the QDBank connection is lost, open bank inventories are closed immediately to protect their contents.
 
 ## Player commands
 
@@ -42,7 +42,7 @@ Account names are suggested automatically when using `/qdbank see`.
 
 | Command | Description | Permission |
 | --- | --- | --- |
-| `/qdbank reload` | Reload the client configuration and reconnect to the QDBANK server. | `qdbank.admin.reload` |
+| `/qdbank reload` | Reload the client configuration and reconnect to the QDBank server. | `qdbank.admin.reload` |
 | `/qdbank admin open <player> <account>` | Create an account for another player. | `qdbank.admin.open` |
 | `/qdbank admin close <player> <account>` | Delete another player's account. | `qdbank.admin.close` |
 | `/qdbank admin list <player>` | List another player's accounts. | `qdbank.admin.list` |
@@ -103,9 +103,9 @@ Rollback operates on individual audited item changes rather than replacing an en
 
 ## Item storage
 
-QDBANK stores each inventory slot independently as `Slot:0` through `Slot:53`. Complete item SNBT is produced and restored with NBT-API, including container contents, equipment components, player heads, custom data, and persistent data containers.
+QDBank stores each inventory slot independently as `Slot:0` through `Slot:53`. Complete item SNBT is produced and restored with NBT-API, including container contents, equipment components, player heads, custom data, and persistent data containers.
 
-NBT-API is embedded inside `qdbank-client.jar`; server owners do not need to install it separately.
+NBT-API is embedded inside `qdbank-client-{version}.jar`; server owners do not need to install it separately.
 
 ## Building
 
@@ -115,10 +115,10 @@ Run:
 ./build.sh
 ```
 
-The final deployment files are placed together in `dist/`:
+The final deployment files are placed together in `dist/` (`{version}` is the Maven project version, currently `1.0.4`):
 
-- `dist/qdbank-server.jar`
-- `dist/qdbank-client.jar`
+- `dist/qdbank-server-{version}.jar`
+- `dist/qdbank-client-{version}.jar`
 - configuration examples
 - deployment notes
 
@@ -130,12 +130,12 @@ mvn clean package
 
 ## Basic deployment
 
-1. Place `qdbank-server.jar` in a standalone directory and run it with `java -jar qdbank-server.jar`.
+1. Place `qdbank-server-{version}.jar` in a standalone directory and run it with `java -jar qdbank-server-{version}.jar`.
 2. Edit the generated server `config.yml`, set a strong shared secret, and configure every allowed client ID.
-3. Place `qdbank-client.jar` in the `plugins` directory of every connected Paper server.
+3. Place `qdbank-client-{version}.jar` in the `plugins` directory of every connected Paper server.
 4. Edit each client configuration so its server address, port, client ID, and secret match the central server.
 5. Restart Paper and verify the connection with `/qdbank status`.
 
-Restrict the QDBANK TCP port to trusted Minecraft hosts with a firewall. Back up SQLite while the service is stopped or with a SQLite-aware online backup tool.
+Restrict the QDBank TCP port to trusted Minecraft hosts with a firewall. Back up SQLite while the service is stopped or with a SQLite-aware online backup tool.
 
-Copyright © 2026 QDBANK · mc100.top. All rights reserved.
+Copyright © 2026 QDBank · mc100.top. All rights reserved.

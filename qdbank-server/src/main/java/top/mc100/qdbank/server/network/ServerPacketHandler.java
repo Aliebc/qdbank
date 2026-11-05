@@ -2,6 +2,7 @@ package top.mc100.qdbank.server.network;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import top.mc100.qdbank.common.ProtocolLimits;
 import top.mc100.qdbank.common.dto.ActionType;
 import top.mc100.qdbank.common.packet.*;
 import top.mc100.qdbank.server.config.ServerConfig;
@@ -89,7 +90,7 @@ public final class ServerPacketHandler extends SimpleChannelInboundHandler<Packe
             ctx.writeAndFlush(new ContainerSyncPacket(p.requestId(),uuid,name,current.revision(),current.content(),false,"Account is not open"));
             return;
         }
-        if(p.content().length>8_000_000)throw new IllegalArgumentException("Inventory payload too large");
+        if(p.content().length>ProtocolLimits.MAX_SIZE_BYTES)throw new IllegalArgumentException("Inventory payload too large");
         boolean updated=accounts.update(uuid,name,p.expectedRevision(),p.content());
         if(!updated){
             var current=accounts.find(uuid,name).orElseThrow();

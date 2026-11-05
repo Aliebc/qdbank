@@ -1,5 +1,5 @@
 name: qdbank
-version: 1.0.4
+version: '${project.version}'
 main: top.mc100.qdbank.client.QdBankPlugin
 api-version: '1.21'
 description: 起点银行跨服客户端

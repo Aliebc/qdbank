@@ -103,9 +103,9 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
     }
     public void closeRemote(BankInventoryHolder holder){bankClient.send(new AccountClosePacket(holder.owner().toString(),holder.accountName(),context(viewer(holder))));}
     public void status(CommandSender sender){
-        sender.sendMessage("§6QDBANK §7| §f客户端 1.0.4 §7| §f服务端 "+serverVersion);
+        sender.sendMessage("§6QDBank §7| §f客户端 1.0.4 §7| §f服务端 "+serverVersion);
         sender.sendMessage(bankClient.isConnected()?"§a连接正常 §7| §f延迟 "+(bankClient.latencyMillis()<0?"等待心跳":bankClient.latencyMillis()+" ms"):"§c未连接（正在自动重连）");
-        sender.sendMessage("§8Copyright © 2026 QDBANK · mc100.top. All rights reserved.");
+        sender.sendMessage("§8Copyright © 2026 QDBank · mc100.top. All rights reserved.");
     }
     public void reloadBank(CommandSender sender){
         reloadConfig();bankClient.reconfigure(ClientConfig.from(getConfig()));sender.sendMessage("§a配置已重载，正在重连");
@@ -124,7 +124,7 @@ public final class QdBankPlugin extends JavaPlugin implements BankClient.Listene
             long id=bankClient.nextRequestId(),since=System.currentTimeMillis()-parseRange(spec.time()).toMillis();
             bankClient.request(id,new AuditLookupPacket(id,uuid,since,spec.action(),spec.include(),spec.exclude(),spec.page(),spec.pageSize()),packet->main(()->{
                 if(packet instanceof AuditResultPacket result){
-                    sender.sendMessage("§6----- QDBANK Lookup §7("+result.page()+"/"+result.totalPages()+") §6-----");
+                    sender.sendMessage("§6----- QDBank Lookup §7("+result.page()+"/"+result.totalPages()+") §6-----");
                     result.entries().forEach(entry->sendAudit(sender,entry));
                     Component nav=Component.text("« 上一页",NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/qdbank admin page "+Math.max(1,result.page()-1)))
                             .append(Component.text("  |  ",NamedTextColor.DARK_GRAY))

@@ -1,6 +1,7 @@
 package top.mc100.qdbank.common.network;
 
 import io.netty.buffer.ByteBuf;
+import top.mc100.qdbank.common.ProtocolLimits;
 import top.mc100.qdbank.common.packet.*;
 import top.mc100.qdbank.common.dto.*;
 
@@ -70,7 +71,7 @@ final class PacketCodec {
 
     private static void string(ByteBuf out, String value) {
         byte[] data = (value == null ? "" : value).getBytes(StandardCharsets.UTF_8);
-        if (data.length > 1_048_576) throw new IllegalArgumentException("String too large");
+        if (data.length > ProtocolLimits.MAX_SIZE_BYTES) throw new IllegalArgumentException("String too large");
         out.writeInt(data.length).writeBytes(data);
     }
 
@@ -81,7 +82,7 @@ final class PacketCodec {
 
     private static void bytes(ByteBuf out, byte[] value) {
         byte[] data = value == null ? new byte[0] : value;
-        if (data.length > 8_388_608) throw new IllegalArgumentException("Payload too large");
+        if (data.length > ProtocolLimits.MAX_SIZE_BYTES) throw new IllegalArgumentException("Payload too large");
         out.writeInt(data.length).writeBytes(data);
     }
 

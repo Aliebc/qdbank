@@ -1,5 +1,7 @@
 package top.mc100.qdbank.common.util;
 
+import top.mc100.qdbank.common.ProtocolLimits;
+
 import java.io.*;
 
 public final class BinaryInventory {
@@ -11,12 +13,12 @@ public final class BinaryInventory {
         byte[][] slots=new byte[SIZE][];
         if(content==null||content.length==0){for(int i=0;i<SIZE;i++)slots[i]=new byte[0];return slots;}
         try(DataInputStream in=new DataInputStream(new ByteArrayInputStream(content))){
-            if(in.readInt()!=MAGIC||in.readInt()!=FORMAT||in.readInt()!=SIZE)throw new IllegalArgumentException("Invalid QDBANK NBT inventory");
+            if(in.readInt()!=MAGIC||in.readInt()!=FORMAT||in.readInt()!=SIZE)throw new IllegalArgumentException("Invalid QDBank NBT inventory");
             for(int i=0;i<SIZE;i++){
                 String key=in.readUTF();
                 if(!key.equals("Slot:"+i))throw new IllegalArgumentException("Invalid slot key "+key);
                 int length=in.readInt();
-                if(length<0||length>16_777_216||length>in.available())throw new IllegalArgumentException("Invalid slot payload");
+                if(length<0||length>ProtocolLimits.MAX_SIZE_BYTES||length>in.available())throw new IllegalArgumentException("Invalid slot payload");
                 slots[i]=in.readNBytes(length);
             }
             if(in.available()!=0)throw new IllegalArgumentException("Trailing inventory data");
